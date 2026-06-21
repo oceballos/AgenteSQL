@@ -2,6 +2,7 @@ import sqlite3
 import random
 import datetime
 from datetime import timedelta
+import os
 
 # Configuración del archivo de base de datos
 DB_NAME = "consultorio_psicologia.db"
@@ -144,6 +145,19 @@ def crear_tablas(conn):
     );
     """)
     
+    # 7. Tabla de Fichas Clínicas
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS fichas_clinicas (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        agenda_id INTEGER UNIQUE NOT NULL,
+        diagnostico TEXT NOT NULL,
+        ordenes_examenes TEXT,
+        interconsultas TEXT,
+        fecha_registro DATE NOT NULL,
+        FOREIGN KEY (agenda_id) REFERENCES agendas(id)
+    );
+    """)
+    
     # Crear Índices para optimizar el rendimiento
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_empleados_especialidad ON empleados(especialidad);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_pacientes_seguro ON pacientes(seguro_id);")
@@ -151,6 +165,7 @@ def crear_tablas(conn):
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_agendas_paciente_fecha ON agendas(paciente_id, fecha);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_pagos_agenda ON pagos(agenda_id);")
     cursor.execute("CREATE INDEX IF NOT EXISTS idx_bonificaciones_empleado ON bonificaciones_empleados(empleado_id);")
+    cursor.execute("CREATE INDEX IF NOT EXISTS idx_fichas_clinicas_agenda ON fichas_clinicas(agenda_id);")
     
     conn.commit()
     print("Esquema de base de datos e índices creados exitosamente.")
@@ -408,7 +423,56 @@ def generar_datos_sinteticos(conn):
         
     print(f"Total de pagos procesados: {pago_count}")
     
-    # --- 6. Generar Bonificaciones de Empleados ---
+    # --- 6. Generar Fichas Clínicas ---
+    print("Generando fichas clínicas...")
+    
+    DIAGNOSTICOS = [
+        "F41.1 Trastorno de Ansiedad Generalizada",
+        "F32.9 Trastorno Depresivo Mayor, no especificado",
+        "F43.1 Trastorno de Estrés Postraumático",
+        "F90.0 Trastorno por Déficit de Atención con Hiperactividad (TDAH)",
+        "F84.0 Trastorno del Espectro Autista",
+        "F42.9 Trastorno Obsesivo-Compulsivo",
+        "F50.0 Anorexia Nerviosa",
+        "F93.0 Trastorno de Ansiedad por Separación en la Infancia",
+        "F31.9 Trastorno Bipolar, no especificado",
+        "Z00.4 Examen Psiquiátrico General"
+    ]
+    
+    ORDENES_EXAMENES = [
+        "Orden de evaluación neuropsicológica cognitiva y de funciones ejecutivas.",
+        "Orden de polisomnografía (estudio del sueño) para evaluación de insomnio.",
+        "Orden de resonancia magnética (RM) cerebral funcional para descartar patología orgánica.",
+        "Test proyectivo de Rorschach y evaluación de personalidad con test de MMPI-2.",
+        "Evaluación del perfil sensorial completo."
+    ]
+    
+    INTERCONSULTAS = [
+        "Interconsulta a Psiquiatría para evaluación de tratamiento farmacológico.",
+        "Interconsulta a Neurología para descarte de alteraciones electroencefalográficas.",
+        "Interconsulta a Terapia Ocupacional para integración sensorial.",
+        "Interconsulta a Psicopedagogía para apoyo en rendimiento académico.",
+        "Interconsulta a Medicina General para analítica sanguínea completa (perfil tiroideo)."
+    ]
+    
+    fichas_count = 0
+    for cita in agendas_registradas:
+        if cita["estado"] != 'Realizada':
+            continue
+            
+        diagnostico = random.choice(DIAGNOSTICOS)
+        orden = random.choice(ORDENES_EXAMENES) if random.random() < 0.20 else None
+        interconsulta = random.choice(INTERCONSULTAS) if random.random() < 0.15 else None
+        
+        cursor.execute("""
+            INSERT INTO fichas_clinicas (agenda_id, diagnostico, ordenes_examenes, interconsultas, fecha_registro)
+            VALUES (?, ?, ?, ?, ?)
+        """, (cita["id"], diagnostico, orden, interconsulta, cita["fecha"].isoformat()))
+        fichas_count += 1
+        
+    print(f"Total de fichas clínicas generadas: {fichas_count}")
+    
+    # --- 7. Generar Bonificaciones de Empleados ---
     print("Calculando y generando bonificaciones de empleados...")
     
     # Vamos a calcular bonificaciones de forma mensual, desde Junio 2025 hasta Mayo 2026 (meses cerrados)
@@ -474,6 +538,12 @@ def generar_datos_sinteticos(conn):
 
 def main():
     print(f"Iniciando creación de base de datos {DB_NAME}...")
+    if os.path.exists(DB_NAME):
+        try:
+            os.remove(DB_NAME)
+            print(f"Base de datos anterior '{DB_NAME}' eliminada para recreación limpia.")
+        except Exception as e:
+            print(f"No se pudo eliminar la base de datos previa: {e}")
     conn = crear_conexion()
     try:
         crear_tablas(conn)

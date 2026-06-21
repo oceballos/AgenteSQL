@@ -17,7 +17,7 @@ def main():
     
     # 1. Verificar número de registros por tabla
     print("\n--- 1. Cantidad de Registros por Tabla ---")
-    tablas = ["seguros_medicos", "empleados", "pacientes", "agendas", "pagos", "bonificaciones_empleados"]
+    tablas = ["seguros_medicos", "empleados", "pacientes", "agendas", "pagos", "bonificaciones_empleados", "fichas_clinicas"]
     for t in tablas:
         res = run_query(cursor, f"SELECT COUNT(*) FROM {t}")
         print(f"Tabla '{t}': {res[0][0]} registros.")
@@ -97,8 +97,21 @@ def main():
         for inc in inconsistencias_bono[:5]:
             print(f"  Empleado {inc[0]} en {inc[1]}: Registrado = {inc[2]}, Calculado = {inc[3]}")
             
-    # 5. Métricas de Negocio Generales
-    print("\n--- 5. Métricas de Operaciones Clínicas ---")
+    # 5. Consistencia de Fichas Clínicas
+    print("\n--- 5. Consistencia de Fichas Clínicas ---")
+    inconsistencias_fichas = run_query(cursor, """
+        SELECT COUNT(a.id) 
+        FROM agendas a 
+        LEFT JOIN fichas_clinicas f ON a.id = f.agenda_id 
+        WHERE a.estado = 'Realizada' AND f.id IS NULL
+    """)[0][0]
+    if inconsistencias_fichas == 0:
+        print("[OK] Todas las consultas realizadas tienen su correspondiente ficha clinica.")
+    else:
+        print(f"[ERROR] Se encontraron {inconsistencias_fichas} consultas realizadas sin ficha clinica.")
+
+    # 6. Métricas de Negocio Generales
+    print("\n--- 6. Métricas de Operaciones Clínicas ---")
     
     # Recaudación Total
     rec = run_query(cursor, """
